@@ -1,0 +1,22 @@
+* Reactor
+    * Reactor + 线程池适合CPU密集型，multiple Reactor适合突发I/O型，一般一个千兆网一个Reactor；
+    multiple reactors（线程） + ThreadPool 更能适应突发I/O和密集计算。其中multiple reactors中
+    的main reactor只注册OP_ACCEPT事件，并派发注册I/O事件到sub reactor上监听，多个sub reactor采
+    用round-robin的机制分配。具体实现见ThreadPool。
+* HttpConnection
+    * HttpConnection是对已连接套接字的抽象；Channel使selectable IO Channel，负责注册和响应事件，
+    但并不拥有fd，Channel是Acceptor、Connection、EventLoop、TimerQueue、HttpConnection的成员，
+    生命周期由后者控制。
+    * 生命周期：不能由removeConnection销毁，因为如果此时Channel的handleEvent（）还在执行的话，会
+    造成core dump，我们使用shared_ptr管理引用计数为1，在Channel中维护一个weak_ptr（tie_），将这个
+    shared_ptr对象赋值给tie_，引用计数仍为1；当连接关闭是，handleEvent中将tie_提升，得到一个shared_ptr
+    对象，引用计数变为2.
+* TimerQueue类
+    * timers_和activeTimes_保存相同的数据，timers_是按照到期时间排序，activeTimers_按照对象地址
+    排序，并且timerQueue只关注最早的那个定时器，所以当发生可读事件的时候，需要使用getExpired（）
+    获取所有的超时事件，因为可能有同一时刻的多个定时器。
+* Loop
+    * 使用eventfd唤醒线程。
+* shared_from_this
+    * 获取自身对象的shared_ptr对象，直接强制转换会导致引用计数+1
+
